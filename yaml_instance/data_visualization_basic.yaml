@@ -6,45 +6,21 @@ graph:
   log_level: INFO
   is_majority_voting: false
   nodes:
-    - id: Data Analyst
-      type: agent
-      context_window: -1
+    - id: Cleaning Executor
+      type: python
       config:
-        provider: openai
-        name: gpt-4o
-        base_url: ${BASE_URL}
-        api_key: ${API_KEY}
-        role: |-
-          You are the **[Central Control Node]** of a data analysis workflow. Your core task is to determine whether the next step is "CLEAN" or "VISUALIZE" based on the status of the data files.
-
-          **[Workflow - Must be executed in strict sequence]**
-          1. You **must** first call `describe_available_files` to view the file list.
-          2. **Status Judgment Logic**:
-             - **Case A: A file ending with `_cleaned` exists.**
-               This means data cleaning is complete. Please ignore the original file, directly read the cleaned file, and perform a brief analysis. If you believe the cleaned file is ready, set NEXT_STEP to `VISUALIZE`. Otherwise, set NEXT_STEP to `CLEAN` and provide further advice.
-             - **Case B: Only raw data files exist.**
-               Please analyze the file. If you detect missing values, format errors, or encoding issues, set NEXT_STEP to `CLEAN`. If the data quality is acceptable, set NEXT_STEP to `VISUALIZE`.
-
-          **[Output Format]**
-          ANALYSIS: <Brief description of data status and field meanings>
-          NEXT_STEP: CLEAN / VISUALIZE
-          CONTENT: <If CLEAN: Provide specific cleaning strategies (e.g., delete null values, fill with mean)> <If VISUALIZE: Provide data relationships you wish to explore (e.g., analyze trends between Column A and Column B)>
-        tooling:
-          - type: function
-            config:
-              auto_load: true
-              tools:
-                - name: describe_available_files
-                - name: load_file
-                - name: read_text_file_snippet
+        timeout_seconds: 120
+        encoding: utf-8
+    - id: Visualization Executor
+      type: python
+      config:
+        timeout_seconds: 120
+        encoding: utf-8
     - id: Visualization Planner
       type: agent
-      context_window: -1
       config:
+        name: qwen3.5-plus
         provider: openai
-        name: gpt-4o
-        base_url: ${BASE_URL}
-        api_key: ${API_KEY}
         role: |-
           You are a Data Visualization Product Manager. Your task is to tell downstream engineers "what data needs to be displayed" rather than restricting them on "how to write the code."
 
@@ -62,6 +38,9 @@ graph:
 
           **Please append the following sentence at the end:**
           'Please use your professional expertise to beautify the chart (including color scheme, font sizes, canvas size, preventing label overlap, etc.). You may adjust specific implementation details based on the data characteristics, provided the visualization goal is achieved.'
+        base_url: ${BASE_URL}
+        api_key: ${API_KEY}
+        params: {}
         tooling:
           - type: function
             config:
@@ -70,14 +49,17 @@ graph:
                 - name: describe_available_files
                 - name: load_file
                 - name: read_text_file_snippet
+        thinking: null
+        memories: []
+        retry: null
+      description: ''
+      context_window: -1
+      log_output: true
     - id: Data Cleaner
       type: agent
-      context_window: -1
       config:
+        name: qwen3.5-plus
         provider: openai
-        name: gpt-4o
-        base_url: ${BASE_URL}
-        api_key: ${API_KEY}
         role: |-
           You are a highly fault-tolerant Python data cleaning script generator.
 
@@ -93,6 +75,9 @@ graph:
           2. Must handle potential reading errors (e.g., encoding issues).
           3. **Most Important:** Upon completion of code execution, you must use `print(output_filename)` to print the generated cleaned filename so the system can capture it.
           4. If missing libraries are detected, please use the tool (`install_python_packages`) to install them.
+        base_url: ${BASE_URL}
+        api_key: ${API_KEY}
+        params: {}
         tooling:
           - type: function
             config:
@@ -102,19 +87,17 @@ graph:
                 - name: load_file
                 - name: read_text_file_snippet
                 - name: install_python_packages
-    - id: Cleaning Executor
-      type: python
-      config:
-        timeout_seconds: 120
-        encoding: utf-8
+        thinking: null
+        memories: []
+        retry: null
+      description: ''
+      context_window: -1
+      log_output: true
     - id: Visualization Programmer
       type: agent
-      context_window: 5
       config:
+        name: qwen3.5-plus
         provider: openai
-        name: gpt-4o
-        base_url: ${BASE_URL}
-        api_key: ${API_KEY}
         role: |-
           You are a **Senior Visualization Engineer** proficient in Matplotlib and Seaborn. Your goal is not merely to "make the code run," but to generate **Publication Quality** charts. Note that you have the capability to call the `describe_available_files`, `load_file`, `read_text_file_snippet`, and `install_python_packages` tools. Before you begin writing code, you **must** check the data files first to understand the data structure. Additionally, you may view the execution results of previous code snippets (usually images) to improve the charts.
 
@@ -129,6 +112,9 @@ graph:
 
           **[Input Handling]**
           First, call tools to check the data and understand its structure, then directly output the Python code block.
+        base_url: ${BASE_URL}
+        api_key: ${API_KEY}
+        params: {}
         tooling:
           - type: function
             config:
@@ -138,25 +124,35 @@ graph:
                 - name: load_file
                 - name: read_text_file_snippet
                 - name: install_python_packages
-    - id: Visualization Executor
-      type: python
-      config:
-        timeout_seconds: 120
-        encoding: utf-8
-    - id: Visual Expert
-      type: agent
+        thinking: null
+        memories: []
+        retry: null
+      description: ''
       context_window: 5
+      log_output: true
+    - id: Data Analyst
+      type: agent
       config:
+        name: qwen3.5-plus
         provider: openai
-        name: gpt-4o
+        role: |-
+          You are the **[Central Control Node]** of a data analysis workflow. Your core task is to determine whether the next step is "CLEAN" or "VISUALIZE" based on the status of the data files.
+
+          **[Workflow - Must be executed in strict sequence]**
+          1. You **must** first call `describe_available_files` to view the file list.
+          2. **Status Judgment Logic**:
+             - **Case A: A file ending with `_cleaned` exists.**
+               This means data cleaning is complete. Please ignore the original file, directly read the cleaned file, and perform a brief analysis. If you believe the cleaned file is ready, set NEXT_STEP to `VISUALIZE`. Otherwise, set NEXT_STEP to `CLEAN` and provide further advice.
+             - **Case B: Only raw data files exist.**
+               Please analyze the file. If you detect missing values, format errors, or encoding issues, set NEXT_STEP to `CLEAN`. If the data quality is acceptable, set NEXT_STEP to `VISUALIZE`.
+
+          **[Output Format]**
+          ANALYSIS: <Brief description of data status and field meanings>
+          NEXT_STEP: CLEAN / VISUALIZE
+          CONTENT: <If CLEAN: Provide specific cleaning strategies (e.g., delete null values, fill with mean)> <If VISUALIZE: Provide data relationships you wish to explore (e.g., analyze trends between Column A and Column B)>
         base_url: ${BASE_URL}
         api_key: ${API_KEY}
-        role: |-
-          You are a visualization expert. You **must** utilize available tools (e.g., `describe_available_files`, `load_file`, `read_text_file_snippet`) to load and inspect the chart based on the input filename. You need to evaluate the content of the chart. If you deem the chart content unsatisfactory, provide suggestions for improvement and set `NEXT_STEP` to `CONTINUE`. When you consider the chart to be sufficiently good, set `NEXT_STEP` to `STOP`, and the system will halt automatically. Note that you should provide **instructions**, not discussions. Your response must adhere to the following format:
-
-          ANALYSIS: <your analysis>
-          NEXT_STEP: CONTINUE / STOP
-          CONTENT: <how to continue to improve the visualization; if you choose 'STOP', leave this blank>
+        params: {}
         tooling:
           - type: function
             config:
@@ -165,6 +161,40 @@ graph:
                 - name: describe_available_files
                 - name: load_file
                 - name: read_text_file_snippet
+        thinking: null
+        memories: []
+        retry: null
+      description: ''
+      context_window: -1
+      log_output: true
+    - id: Visual Expert
+      type: agent
+      config:
+        name: qwen3.5-plus
+        provider: openai
+        role: |-
+          You are a visualization expert. You **must** utilize available tools (e.g., `describe_available_files`, `load_file`, `read_text_file_snippet`) to load and inspect the chart based on the input filename. You need to evaluate the content of the chart. If you deem the chart content unsatisfactory, provide suggestions for improvement and set `NEXT_STEP` to `CONTINUE`. When you consider the chart to be sufficiently good, set `NEXT_STEP` to `STOP`, and the system will halt automatically. Note that you should provide **instructions**, not discussions. Your response must adhere to the following format:
+
+          ANALYSIS: <your analysis>
+          NEXT_STEP: CONTINUE / STOP
+          CONTENT: <how to continue to improve the visualization; if you choose 'STOP', leave this blank>
+        base_url: ${BASE_URL}
+        api_key: ${API_KEY}
+        params: {}
+        tooling:
+          - type: function
+            config:
+              auto_load: true
+              tools:
+                - name: describe_available_files
+                - name: load_file
+                - name: read_text_file_snippet
+        thinking: null
+        memories: []
+        retry: null
+      description: ''
+      context_window: 5
+      log_output: true
   edges:
     - from: Data Analyst
       to: Visualization Planner
